@@ -1,33 +1,30 @@
-# Test record — 2026-11-05
+# Cloud validation record — version 0.2-experimental
 
-Environment: managed Linux x86_64 cloud machine; no access to the user's home TV or iPhone. This record describes actual executed checks, not physical interoperability.
+These are executed cloud checks, not a physical TV/sender certification. User device diagnostics and sender OS-version reports are not included in this public record.
 
 | Check | Outcome |
 |---|---|
-| Native protocol + JNI cross-compilation, NDK r27c / API 28 / armeabi-v7a | Passed |
-| Android debug APK assembly + lintDebug | Passed (before final lifecycle/parser refinements) |
-| Final signed release candidate | See delivery verification below; not device-installed |
-| `bounded-http` native test | Passed: fragmented RTSP, interrupted/truncated body, malformed Content-Length, size_t overflow, cumulative 1 MiB request budget, AVC configuration truncation and oversized SPS/PPS |
-| `rtsp-start-stop` native integration | Passed: three actual socket listen/OPTIONS/binary-plist info/disconnect/stop cycles, checking AAC-only format masks and no PCM/ALAC feature bits with a persisted generated pairing identity; not a sender pairing test |
-| AddressSanitizer + UndefinedBehaviorSanitizer with leak detection | Both native tests passed; no reported sanitizer errors in those exercised paths |
-| Mac helper behavioral tests | Six passed on Linux Bash using a fake ADB executable; install scope, path with spaces, wrong model, unauthorized device, altered checksum, failed-install exit status and stop/Home routing checked |
-| TV ABI/decoder/display/memory inspection | Unrun; waiting for Mac diagnostics |
-| Android 9 UI/lifecycle/device decoder tests | Unrun; no Android device/emulator configured, no `/dev/kvm` available for accelerated emulator |
-| iPhone 16e / iOS 27 discovery, PIN, real frames, audio/sync, rotation | Unrun |
-| Reconnection, second sender, network interruption on TV | Unrun |
-| Actual TV CPU/RAM/frame drops/latency | Unmeasured |
-| HDMI, streaming-app, remote/Bluetooth and screensaver regression checks | Unrun on TV |
+| Native RTSP parser limits | Passed: fragmented requests, truncated body, malformed length, integer overflow, cumulative allocation limit, AVC configuration bounds |
+| Real local RTSP server integration | Passed: three start/OPTIONS/binary-plist info/disconnect/stop cycles; PCM/ALAC/AAC format masks; 720p/1080p @30 requests; reject unsupported 4K profile |
+| Real ALAC decoder | Passed: synthetic 352-frame stereo packet decoded to bit-exact original PCM; flush/reuse; malformed/truncated input and input/output budgets |
+| ASan/UBSan/leak checks | All three native tests passed with halt-on-error; FFmpeg host audio decoder and wrapper instrumented |
+| Decoder input retry regression | Passed: transient backpressure lasting beyond the old 10 ms cutoff, output service while waiting, bounded sustained stall and stop cancellation |
+| Mac helper tests | Seven passed using a fake ADB: install scope, destination with spaces, wrong model, unauthorized target, bad checksum, install exit status, stop/Home, optional missing codec-service diagnostics |
+| Android release assembly/lint | Passed during development; final artifact verification is recorded in BUILD-INFO.json and below |
+| Physical 1080p decoding / sustained video / ALAC/PCM output | Unrun by the cloud agent |
+| Apple Music interoperability / audio-video sync / drift | Unrun by the cloud agent |
+| iPhone interoperability / orientation | Unrun by the cloud agent |
+| Android lifecycle, Surface recreation and vendor resource release | Code changes built; device regression test still required |
+| TV CPU/RAM, actual display drops and end-to-end latency | Unmeasured by the cloud agent |
 
-No zero-test run is reported as validation. Host tests exercise native library behavior and parser limits; they do not test Java MediaCodec/AudioTrack, Android lifecycle, encrypted media transport with a real sender, or mDNS interoperability. The fake-ADB tests are helper validation, not real Mac/TV installation tests. Initial build/test failures (missing math link and incorrect expectation for upstream's successful start return value) were diagnosed and corrected before the passing native test runs.
+Sanitizer configure initially failed because LeakSanitizer cannot run under the shell ptrace sandbox. Building and testing in the authorized execution path without ptrace preserved all sanitizer checks. The final native runs used address/leak checking and UBSan halt-on-error; no errors were reported in the exercised paths. The ALAC test validates codec output, not encrypted AirPlay transport or physical audio hardware.
 
-Required next step: collect the TV ABI/codec diagnostics, then use the physical checklist in TV-TESTING.md. A real mirrored frame and audible synchronized audio are required before declaring receiver success. Negotiation or decoding failures on iOS 27 may require further source changes.
+The retry test uses the same platform-independent CodecInput class as Android playback and a deterministic fake clock/source. It does not simulate a complete Android decoder. Fake-ADB tests run on Linux Bash, not on a physical Mac/TV. No zero-test run is counted as validation.
 
-## Final delivery verification
+Version 0.2 fixes source-level failure paths: immediate teardown after one input wait; overly tight startup audio buffering; video teardown stopping continuing audio; shared dimensions applied to older queued frames; unnecessary square decoder reservations; disappearing error information. These are not a claim that a particular reported session failure has been conclusively diagnosed or that all playback errors are fixed.
 
-Final release assembly and lintRelease passed (0 errors; 8 non-fatal lint warnings: hardcoded English UI strings, Chrome OS ABI coverage and modern backup configuration). No warning was disabled. APK alignment and APK Signature Scheme v3 verification for Android API 28 passed. ELF32 ARM native packaging and APK ZIP integrity passed. The linked crypto archive was built from pinned OpenSSL 3.5.9. Both native tests passed again under ASan/UBSan after capability refinements. Build/signing identity and hashes are in BUILD-INFO.json. No physical device success is implied.
+To finish validation, follow TV-TESTING.md and MAC-AIRPLAY.md. Record video, audio, synchronization, resolution and reconnect separately. If a failure recurs, use Diagnostics / last error and local app-only event capture rather than uploading broad system logs.
 
-APK SHA-256: `32c30ef2d51a3ece9646379cb13a0ac8493a0b2bb3cee1323ad2d4c964733c78`.
+## Final artifact verification
 
-## Generic helper and sender guidance update
-
-Seven helper tests passed after changing the default log destination to `~/Downloads` and treating unavailable optional codec-service diagnostics as a warning. The APK and app/native code are unchanged. Mac mirroring instructions document intended shared-protocol use; no Mac discovery, negotiation, desktop, audio or synchronization test has run. No new device-specific diagnostic report is included in this update.
+Final release assembly and lintRelease passed (0 errors, 7 warnings; no warning disabled). APK alignment, ZIP integrity, ELF32 ARM packaging and Android API 28 signature verification passed. The certificate SHA-256 matches the original release; versionCode is 2. This APK can update the existing installation without uninstalling. Enabled FFmpeg decoder configuration was checked: ALAC only. APK SHA-256: `a270b44726df546190b53600c3d40e3fe14db8e34ca482debb6c830c93fc704e`.

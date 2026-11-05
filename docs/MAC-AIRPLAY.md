@@ -7,7 +7,7 @@ The Android receiver uses UxPlay's shared iPhone/macOS protocol core. No separat
 Install the APK from the extracted Downloads folder:
 
 ```bash
-cd "$HOME/Downloads/CinemaAir-experimental"
+cd "$HOME/Downloads/CinemaAir-0.2-experimental"
 TV_LAUNCHER_DIR="$HOME/Downloads" bash scripts/install-tv.sh 192.168.15.3:5555
 ```
 
@@ -20,13 +20,15 @@ Substitute the current TV address if it changed. This installs/updates only Cine
 5. Play a short unprotected video. Record audible TV audio and synchronization separately from successful video reception.
 6. Stop through the Mac's Screen Mirroring control. Select **Start receiving** on TV again before a reconnect or an iPhone test. Test one sender at a time.
 
-Audio-only Sound output selection is not a substitute for screen mirroring. ALAC/PCM playback and AirPlay 2 multiroom are unsupported. Mac extended-display behavior and protected streaming content are not claimed.
+Audio-only Sound output selection is not a substitute for screen mirroring. Legacy ALAC/PCM stereo 44.1 kHz / 16-bit playback now has an implementation; other rates/depths and AirPlay 2 multiroom remain unsupported. Mac extended-display behavior and protected streaming content are not claimed.
 
 ## Compatibility risks
 
 Upstream UxPlay documents macOS mirror-mode AAC audio separately from audio-only ALAC. That is evidence of the shared protocol core's intended use, not a validation of Android playback or every macOS version.
 
-This port advertises only implemented AAC formats. Published receiver notes associate some macOS pairing behavior with PCM/ALAC feature flags. Those flags remain disabled because their playback paths are absent. Whether a given macOS sender accepts the narrower capability set is unknown. If Mac discovery or negotiation fails, additional codec integration may be necessary; do not enable unsupported feature bits merely to make discovery appear successful.
+Version 0.2 advertises PCM, ALAC, AAC-LC and AAC-ELD only for its implemented 44.1 kHz/stereo paths. ALAC/PCM are 16-bit. A minimal LGPL FFmpeg ALAC decoder was added; Android continues to decode AAC and H.264. Audio routing changes must be tested separately from mirroring. Video teardown must not end continuing audio, and normal temporary decoder input waits are retried rather than treated as an immediate fatal error. Those are source-level fixes, not evidence of physical Apple Music playback or A/V synchronization.
+
+Auto quality requests up to 1080p/30 only when the display and H.264 decoder report support. Use 720p to compare stability if necessary. Read Diagnostics / last error after a stop; optional `scripts/diagnose-tv.sh` saves app-only diagnostic events locally. Content restrictions from the sender/service still apply; the app has no protected-streaming filter to turn off.
 
 ## Separate Mac validation record — unrun
 

@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include "raop.h"
 #include "capabilities.h"
+#include "display_profile.h"
 #include <plist/plist.h>
 #define CHECK(x) do { if(!(x)) { fprintf(stderr,"Failed at %d: %s\n",__LINE__,#x);exit(1); } } while(0)
 static void audio(void *c,raop_ntp_t *n,audio_decode_struct *d) {}
@@ -14,6 +15,10 @@ static void video(void *c,raop_ntp_t *n,video_decode_struct *d) {}
 static double volume(void *c) { return 0; }
 static void nothing(void *c) {}
 int main(void) {
+    CHECK(cinema_audio_format_valid(2,352,UINT64_C(1)<<18));
+    CHECK(cinema_audio_format_valid(1,352,UINT64_C(1)<<11));
+    CHECK(!cinema_audio_format_valid(2,352,UINT64_C(1)<<20)); // 48k not implemented
+    CHECK(!cinema_audio_format_valid(2,4096,UINT64_C(1)<<18));
     char tmp[]="/tmp/cinemaair-protocol-XXXXXX";CHECK(mkdtemp(tmp));
     char key[256];snprintf(key,sizeof(key),"%s/pairing.key",tmp);
     char hw[6]={2,0,0,0,0,1};
@@ -24,7 +29,8 @@ int main(void) {
         CHECK(raop_init2(s,0,"02:00:00:00:00:01",key)==0);
         int err=0;dnssd_t *d=dnssd_init("Cinema Air Test",15,hw,6,1,&err);CHECK(d);
         cinema_capabilities(d);
-        raop_set_dnssd(s,d);raop_set_plist(s,"width",1280);raop_set_plist(s,"height",720);
+        raop_set_dnssd(s,d);CHECK(cinema_display_profile(s,cycle==1?1920:1280,cycle==1?1080:720)==0);
+        CHECK(cinema_display_profile(s,3840,2160)==-1);
         unsigned short port=0;CHECK(raop_start_httpd(s,&port)>0);CHECK(port>0);raop_set_port(s,port);
         int fd=socket(AF_INET,SOCK_STREAM,0);CHECK(fd>=0);
         struct timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
@@ -50,16 +56,22 @@ int main(void) {
         CHECK(strstr(response,"200 OK"));CHECK(body && !memcmp(body,"bplist00",8));
         plist_t metadata=NULL;plist_from_bin(body,(uint32_t)(used-(body-response)),&metadata);CHECK(metadata);
         uint64_t flags=0;plist_get_uint_val(plist_dict_get_item(metadata,"features"),&flags);
-        CHECK((flags & (UINT64_C(1)<<20))!=0);CHECK(!(flags & ((UINT64_C(1)<<18)|(UINT64_C(1)<<19))));
+        CHECK((flags & (UINT64_C(1)<<20))!=0);CHECK((flags & ((UINT64_C(1)<<18)|(UINT64_C(1)<<19)))==((UINT64_C(1)<<18)|(UINT64_C(1)<<19)));
         plist_t formats=plist_dict_get_item(metadata,"audioFormats");CHECK(plist_array_get_size(formats)==2);
         for(int i=0;i<2;i++) {
             plist_t f=plist_array_get_item(formats,i);uint64_t mask=0;
             plist_get_uint_val(plist_dict_get_item(f,"audioOutputFormats"),&mask);CHECK(mask==CINEMA_AUDIO_FORMATS);
         }
+        plist_t display=plist_array_get_item(plist_dict_get_item(metadata,"displays"),0);
+        uint64_t w=0,h=0,fps=0;
+        plist_get_uint_val(plist_dict_get_item(display,"width"),&w);
+        plist_get_uint_val(plist_dict_get_item(display,"height"),&h);
+        plist_get_uint_val(plist_dict_get_item(display,"maxFPS"),&fps);
+        CHECK(w==(cycle==1?1920:1280) && h==(cycle==1?1080:720) && fps==30);
         plist_free(metadata);
         close(fd);raop_destroy(s);dnssd_destroy(d);
     }
     CHECK(unlink(key)==0);CHECK(rmdir(tmp)==0);
-    puts("PASS: three actual RTSP listen / OPTIONS / binary-plist info with AAC-only capabilities / disconnect / stop cycles, persisted pairing identity");
+    puts("PASS: three actual RTSP listen / OPTIONS / binary-plist info with PCM/ALAC/AAC capabilities and 720p/1080p profiles / disconnect / stop cycles, persisted pairing identity");
     return 0;
 }

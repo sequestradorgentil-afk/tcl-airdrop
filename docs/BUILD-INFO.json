@@ -1,12 +1,19 @@
 {
-  "apk_sha256": "32c30ef2d51a3ece9646379cb13a0ac8493a0b2bb3cee1323ad2d4c964733c78",
   "package": "com.gabriel.cinemaair",
-  "version": "0.1-experimental",
+  "version": "0.2-experimental",
+  "version_code": 2,
+  "apk_sha256": "a270b44726df546190b53600c3d40e3fe14db8e34ca482debb6c830c93fc704e",
+  "abi": "armeabi-v7a",
   "min_sdk": 28,
   "target_sdk": 35,
-  "abi": "armeabi-v7a (not TV-verified)",
-  "openssl_source_commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
-  "linked_crypto_archive_sha256": "c3e049dfb4444f272d3a564029e2c0b9af3b831cf6d1b8924440ceef26fa6327",
   "signer_certificate_sha256": "1ef7e0bb57b5b9470352f614871ed5fe4a1a29c2330c494d4faf224bf7641c52",
-  "physical_interoperability": "UNTESTED"
+  "ffmpeg_source_commit": "1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7",
+  "ffmpeg_enabled_decoders": [
+    "ALAC"
+  ],
+  "openssl_source_commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
+  "quality_policy": "Auto up to 1080p30, gated by display and decoder capabilities; 720p fallback",
+  "physical_update_validation": "UNTESTED",
+  "lint_errors": 0,
+  "lint_warnings": 7
 }

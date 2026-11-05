@@ -321,7 +321,7 @@ raop_rtp_mirror_thread(void *arg)
             /*packet[0:3] contains the payload size */
             int payload_size = byteutils_get_int(packet, 0);
             /* Cinema Air: reject malformed lengths before allocations or payload reads. */
-            if (payload_size < 0 || payload_size > 1024 * 1024) {
+            if (payload_size < 0 || payload_size > 2 * 1024 * 1024) {
                 conn_reset = true;
                 break;
             }

@@ -5,20 +5,25 @@
 #include <ctime>
 #include <cstring>
 #include <mutex>
+#include <memory>
+#include "alac_decoder.h"
 extern "C" {
 #include "raop.h"
 #include "capabilities.h"
+#include "display_profile.h"
 }
 
 namespace {
 JavaVM *vm;
 jobject listener;
-jmethodID packetMethod, eventMethod, sizeMethod;
+jmethodID packetMethod, eventMethod, sizeMethod, volumeMethod;
 raop_t *server;
 dnssd_t *discovery;
 std::atomic<bool> running{false};
 std::mutex senderMutex;
 std::string senderId;
+std::mutex audioMutex;
+std::unique_ptr<AlacDecoder> alac;
 struct Env {
     JNIEnv *env = nullptr;
     bool attached = false;
@@ -54,22 +59,41 @@ void packet(int kind, unsigned char *bytes, int length, uint64_t time) {
     if (e.env->ExceptionCheck()) e.env->ExceptionClear();
 }
 void audio(void *, raop_ntp_t *, audio_decode_struct *d) {
-    if (d->ct != 8 && d->ct != 4) { event("Error: only AAC-ELD and AAC-LC are implemented"); return; }
-    packet(d->ct, d->data, d->data_len, d->ntp_time_local);
+    if(d->ct==2) {
+        std::lock_guard<std::mutex> lock(audioMutex);
+        if(!alac) alac.reset(new AlacDecoder());
+        uint8_t pcm[352*4];size_t length=0;
+        if(!alac->decode(d->data,(size_t)d->data_len,pcm,sizeof(pcm),length)) {
+            event("Error: ALAC packet could not be decoded (44.1 kHz / stereo / 16 bit required)");return;
+        }
+        packet(1,pcm,(int)length,d->ntp_time_local);
+    } else if(d->ct==1) {
+        if(d->data_len<=0 || d->data_len>16384 || d->data_len%4) { event("Error: invalid PCM block");return; }
+        packet(1,d->data,d->data_len,d->ntp_time_local);
+    } else if(d->ct==8 || d->ct==4) packet(d->ct,d->data,d->data_len,d->ntp_time_local);
+    else event("Error: unsupported audio compression type");
 }
 void video(void *, raop_ntp_t *, video_decode_struct *d) {
     if (d->is_h265) { event("Error: HEVC is not enabled"); return; }
     packet(0, d->data, d->data_len, d->ntp_time_local);
 }
 void format(void *, unsigned char *ct, unsigned short *spf, bool *, bool *, uint64_t *af) {
-    if ((*ct!=8 && *ct!=4) || (*af && *af!= (UINT64_C(1)<<22) && *af!=(UINT64_C(1)<<24)) ||
-        (*ct==8 && *spf!=480) || (*ct==4 && *spf!=1024))
-        event("Error: unsupported negotiated audio format or frame length");
+    if(!cinema_audio_format_valid(*ct,*spf,*af)) {
+        char message[128];snprintf(message,sizeof(message),"Error: audio format unsupported (ct=%u spf=%u format=%llu)",
+            (unsigned)*ct,(unsigned)*spf,(unsigned long long)*af);event(message);
+    }
 }
 void noop(void *) {}
+void audioFlush(void *) {
+    { std::lock_guard<std::mutex> lock(audioMutex);if(alac) alac->flush(); }
+    event("Audio flush");
+}
 void disconnected(void *) {}
-void reset(void *, int) { event("Error: connection interrupted; stop and restart receiving"); }
-void videoReset(void *, reset_type_t) { event("Session ended"); }
+void reset(void *, int) { event("Video interrupted"); }
+void videoReset(void *, reset_type_t type) {
+    if(type==RESET_TYPE_RTP_SHUTDOWN || type==RESET_TYPE_NOHOLD) event("Video ended");
+    // HLS-related resets must not stop an unrelated RAOP audio stream.
+}
 void admit(void *, char *id, char *, char *name, bool *accepted) {
     std::lock_guard<std::mutex> lock(senderMutex);
     std::string incoming = id ? std::string(id).substr(0,128) : "unknown";
@@ -89,7 +113,11 @@ void rate(void *, float) {}
 void info(void *, playback_info_t *p) { memset(p,0,sizeof(*p)); }
 float playlist(void *) { return 0; }
 double volume(void *) { return 0; }
-void setVolume(void *, float) {}
+void setVolume(void *, float db) {
+    if(!running) return;
+    Env e;if(e.env) e.env->CallVoidMethod(listener,volumeMethod,db);
+    if(e.env && e.env->ExceptionCheck()) e.env->ExceptionClear();
+}
 void pin(void *, char *p) { event((std::string("Pairing PIN: ")+p).c_str()); }
 // Matches upstream's default without a registration allowlist. PIN behavior must be device-tested.
 bool registered(void *, const char *) { return true; }
@@ -110,19 +138,22 @@ void cleanup(JNIEnv *env) {
     if (discovery) { dnssd_destroy(discovery); discovery = nullptr; }
     if (listener) { env->DeleteGlobalRef(listener); listener = nullptr; }
     senderId.clear();
+    std::lock_guard<std::mutex> lock(audioMutex);alac.reset();
 }
 }
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *v, void *) { vm=v; return JNI_VERSION_1_6; }
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_gabriel_cinemaair_Receiver_nativeStart(JNIEnv *env, jobject self, jstring key, jbyteArray id) {
+Java_com_gabriel_cinemaair_Receiver_nativeStart(JNIEnv *env, jobject self, jstring key, jbyteArray id, jint width, jint height) {
     if (server) return env->NewStringUTF("Already started");
+    if(!((width==1280 && height==720)||(width==1920 && height==1080))) return env->NewStringUTF("Unsupported quality selection");
     listener = env->NewGlobalRef(self);
     jclass cls = env->GetObjectClass(self);
     packetMethod = env->GetMethodID(cls, "onPacket", "(I[BJ)V");
     eventMethod = env->GetMethodID(cls, "onEvent", "(Ljava/lang/String;)V");
     sizeMethod = env->GetMethodID(cls, "onSize", "(II)V");
+    volumeMethod = env->GetMethodID(cls, "onVolume", "(F)V");
     env->DeleteLocalRef(cls);
-    if (!packetMethod || !eventMethod || !sizeMethod || env->GetArrayLength(id)!=6)
+    if (!packetMethod || !eventMethod || !sizeMethod || !volumeMethod || env->GetArrayLength(id)!=6)
         return env->NewStringUTF("JNI initialization failed");
     char hardware[6]; env->GetByteArrayRegion(id, 0, 6, reinterpret_cast<jbyte *>(hardware));
     int error=0;
@@ -134,7 +165,7 @@ Java_com_gabriel_cinemaair_Receiver_nativeStart(JNIEnv *env, jobject self, jstri
     c.audio_process=audio; c.video_process=video; c.video_set_codec_and_size=size;
     c.conn_init=noop; c.conn_destroy=disconnected; c.conn_reset=reset; c.conn_feedback=noop;
     c.video_reset=videoReset; c.video_pause=noop; c.video_resume=noop;
-    c.audio_flush=noop; c.video_flush=noop; c.audio_set_client_volume=volume;
+    c.audio_flush=audioFlush; c.video_flush=noop; c.audio_set_client_volume=volume;
     c.audio_set_volume=setVolume; c.display_pin=pin; c.check_register=registered;
     c.get_custom_profile=profile; c.audio_get_format=format;
     c.report_client_request=admit;
@@ -152,8 +183,7 @@ Java_com_gabriel_cinemaair_Receiver_nativeStart(JNIEnv *env, jobject self, jstri
     env->ReleaseStringUTFChars(key,path);
     if (result) { cleanup(env); return env->NewStringUTF("Could not create private pairing identity"); }
     raop_set_dnssd(server,discovery);
-    raop_set_plist(server,"width",1280); raop_set_plist(server,"height",720);
-    raop_set_plist(server,"maxFPS",30); raop_set_plist(server,"refreshRate",30);
+    cinema_display_profile(server,width,height);
     raop_set_plist(server,"pin",0);
     unsigned short port=0;
     raop_ntp_global_init();

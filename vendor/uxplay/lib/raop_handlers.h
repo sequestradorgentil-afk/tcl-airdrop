@@ -1030,6 +1030,7 @@ raop_handler_setup(raop_conn_t *conn,
                 remote_cport = (unsigned short) uint_val;   /* must != 0 to activate audio resend requests */
 
                 plist_t req_stream_ct_node = plist_dict_get_item(req_stream_node, "ct");
+                uint_val = 0;
                 plist_get_uint_val(req_stream_ct_node, &uint_val);
                 ct = (unsigned char) uint_val;
 
@@ -1042,6 +1043,7 @@ raop_handler_setup(raop_conn_t *conn,
                     uint8_t bool_val = 0;
 
                     plist_t req_stream_spf_node = plist_dict_get_item(req_stream_node, "spf");
+                    uint_val = ct == 2 ? 352 : ct == 4 ? 1024 : ct == 8 ? 480 : 0;
                     plist_get_uint_val(req_stream_spf_node, &uint_val);
                     spf = (unsigned short) uint_val;
 
