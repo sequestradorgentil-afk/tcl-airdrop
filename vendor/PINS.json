@@ -1,0 +1,18 @@
+{
+  "uxplay": {
+    "repository": "https://github.com/FDH2/UxPlay",
+    "commit": "d4b7373cb6107b2d8d6c5838991c19d39e2b96ae",
+    "copied": "lib",
+    "local_changes": "docs/RESEARCH.md"
+  },
+  "libplist": {
+    "repository": "https://github.com/libimobiledevice/libplist",
+    "commit": "cf5897a71ea412ea2aeb1e2f6b5ea74d4fabfd8c",
+    "version": "2.7.0"
+  },
+  "openssl": {
+    "repository": "https://github.com/openssl/openssl",
+    "commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
+    "version": "3.5.9"
+  }
+}

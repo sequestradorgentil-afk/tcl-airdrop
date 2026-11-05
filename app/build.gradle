@@ -1,0 +1,17 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.gabriel.cinemaair'
+    compileSdk 35
+    ndkVersion '27.2.12479018'
+    defaultConfig {
+        applicationId 'com.gabriel.cinemaair'
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '0.1-experimental'
+        ndk { abiFilters 'armeabi-v7a' }
+        externalNativeBuild { cmake { arguments '-DANDROID_STL=c++_static' } }
+    }
+    externalNativeBuild { cmake { path '../native/CMakeLists.txt'; version '3.22.1' } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+}
