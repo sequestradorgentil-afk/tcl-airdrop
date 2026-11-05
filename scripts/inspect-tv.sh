@@ -8,6 +8,11 @@ for property in ro.product.manufacturer ro.product.cpu.abi ro.product.cpu.abi2 r
 done
 "$ADB" -s "$TV" shell wm size </dev/null | tee -a "$LOG"
 "$ADB" -s "$TV" shell dumpsys display </dev/null > "$DESTINATION/logs/display.txt"
-"$ADB" -s "$TV" shell dumpsys media.codec </dev/null > "$DESTINATION/logs/media-codec.txt"
+codec_status=0
+"$ADB" -s "$TV" shell dumpsys media.codec </dev/null > "$DESTINATION/logs/media-codec.txt" 2>&1 || codec_status=$?
+case "$(cat "$DESTINATION/logs/media-codec.txt")" in *"Can't find service:"*) codec_status=1;; esac
+if [ "$codec_status" -ne 0 ]; then
+  printf '%s\n' 'Codec-service diagnostics unavailable on this firmware. The app checks decoder availability separately.' | tee -a "$LOG"
+fi
 "$ADB" -s "$TV" shell cat /proc/meminfo </dev/null > "$DESTINATION/logs/memory.txt"
 printf 'Diagnostics saved to %s/logs. Share model/API/ABI first; inspect full logs before sharing.\n' "$DESTINATION"

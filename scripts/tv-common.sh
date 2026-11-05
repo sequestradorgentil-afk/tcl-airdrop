@@ -3,7 +3,7 @@
 set -euo pipefail
 ADB="$HOME/Downloads/platform-tools/adb"
 TV=${1:-192.168.15.3:5555}
-DESTINATION=${TV_LAUNCHER_DIR:-"$HOME/Documents/TV LAUNCHER"}
+DESTINATION=${TV_LAUNCHER_DIR:-"$HOME/Downloads"}
 mkdir -p "$DESTINATION/logs"
 LOG="$DESTINATION/logs/$(date +%Y%m%d-%H%M%S)-$$.log"
 trap 'result=$?; if [ "$result" -ne 0 ]; then printf "Failed (exit %s). Log: %s\n" "$result" "$LOG" >&2; fi' EXIT

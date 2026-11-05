@@ -16,6 +16,7 @@ case "$*" in
  *ro.build.version.sdk*) echo 28 ;;
  *ro.product.cpu.abilist*) echo armeabi-v7a,armeabi ;;
  *getprop*) echo test ;;
+ *'dumpsys media.codec'*) if [ "${FAKE_MISSING_CODEC:-}" = 1 ]; then echo "Can't find service: media.codec" >&2; exit 1; fi ;;
  *'install -r'*) exit "${FAKE_INSTALL_EXIT:-0}" ;;
  *'am start'*) echo 'Status: ok' ;;
 esac
@@ -40,7 +41,13 @@ class MacHelpers(unittest.TestCase):
         trace=self.commands();self.assertIn('install -r',trace)
         self.assertIn('com.gabriel.cinemaair/.MainActivity',trace)
         self.assertNotIn('uninstall',trace);self.assertNotIn('settings put',trace)
-        self.assertTrue(list((self.root/'Documents/TV LAUNCHER/logs').glob('*.log')))
+        self.assertTrue(list((self.root/'Downloads/logs').glob('*.log')))
+    def test_unavailable_codec_service_is_optional(self):
+        r=self.run_helper('inspect-tv.sh',FAKE_MISSING_CODEC='1')
+        self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+        self.assertIn('Codec-service diagnostics unavailable',r.stdout)
+        self.assertIn('cat /proc/meminfo',self.commands())
+        self.assertIn("Can't find service",(self.root/'Downloads/logs/media-codec.txt').read_text())
     def test_bad_checksum_never_calls_adb(self):
         (self.bundle/'CinemaAir-experimental-armv7.apk').write_bytes(b'altered')
         self.assertNotEqual(self.run_helper('install-tv.sh').returncode,0)

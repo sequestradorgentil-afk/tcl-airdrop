@@ -27,3 +27,7 @@ Required next step: collect the TV ABI/codec diagnostics, then use the physical 
 Final release assembly and lintRelease passed (0 errors; 8 non-fatal lint warnings: hardcoded English UI strings, Chrome OS ABI coverage and modern backup configuration). No warning was disabled. APK alignment and APK Signature Scheme v3 verification for Android API 28 passed. ELF32 ARM native packaging and APK ZIP integrity passed. The linked crypto archive was built from pinned OpenSSL 3.5.9. Both native tests passed again under ASan/UBSan after capability refinements. Build/signing identity and hashes are in BUILD-INFO.json. No physical device success is implied.
 
 APK SHA-256: `32c30ef2d51a3ece9646379cb13a0ac8493a0b2bb3cee1323ad2d4c964733c78`.
+
+## Generic helper and sender guidance update
+
+Seven helper tests passed after changing the default log destination to `~/Downloads` and treating unavailable optional codec-service diagnostics as a warning. The APK and app/native code are unchanged. Mac mirroring instructions document intended shared-protocol use; no Mac discovery, negotiation, desktop, audio or synchronization test has run. No new device-specific diagnostic report is included in this update.
